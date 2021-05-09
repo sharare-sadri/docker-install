@@ -1,0 +1,72 @@
+---
+  - hosts: all
+    become: true
+    
+    vars:
+      removing_docker_pack:
+        - docker-scan-plugin
+        - docker-ce-rootless-extras
+        - docker-ce-cli
+        - docker
+        - docker-ce-cli
+        
+        
+    tasks:
+      
+      - name: Check if docker exist
+        shell: "which docker"
+        register: result
+        ignore_errors: true
+
+      - name: show docker installation path
+        debug:
+          msg: Docker is already installed on {{ result.stdout }}
+        when: result.rc == 0
+
+      - name: Remove previous Doker packages
+        apt:
+          name: "{{ removing_docker_pack}}"
+          state: absent 
+
+      - name: Exit if docker exist
+        meta: end_play
+        when: result.rc == 0
+
+     
+
+      - name: Update apt packages
+        apt:
+          update_cache: yes
+
+      - name: Install packages to allow apt to use repository over HTTP
+        apt:
+          name: "{{ item }}"
+          state: present
+        loop: [ 'apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common', 'python3-pip', 'virtualenv', 'python3-setuptools']
+          
+            
+      - name: Add Docker’s official GPG key
+        apt_key:
+          url: https://download.docker.com/linux/ubuntu/gpg
+          state: present
+
+      - name: Add Docker Repository
+        apt_repository:
+          repo: deb https://download.docker.com/linux/ubuntu bionic stable
+          state: present
+
+      - name: Install docker-ce
+        apt:
+          name: docker-ce
+          state: latest
+
+      - name: Restart docker service
+        systemd:
+          name: docker.service
+          enabled: yes
+          state: restarted
+    
+      - name: get docker version
+        shell: "docker -v | cut -d ' ' -f 3 | cut -d ',' -f 1"
+        register: version
+      - debug: var=version.stdout
